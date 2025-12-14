@@ -67,6 +67,7 @@ func findBoxForVertex(vert []int, xList, yList []int, xMap, yMap map[int][]int) 
 }
 
 func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, box [][]int) (int, [][]int) {
+	dir = dir % 4
 
 	step := len(box)
 	switch step {
