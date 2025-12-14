@@ -66,36 +66,76 @@ func findBoxForVertex(vert []int, xList, yList []int, xMap, yMap map[int][]int) 
 	return 0
 }
 
+// search recursively returns the area and vertices of the largest rectangle which doesn't exit the bounds of the polygon.
+// The rectangle will originate from ogVert and must contain 2 vertices that are diagonal from each other.
 func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, box [][]int) (int, [][]int) {
 	dir = dir % 4
 
 	step := len(box)
 	switch step {
-	case 3:
+
+	case 1, 2: // Try the farthest valid Xk or Yk
+
+		switch dir {
+
+		case DirectionUp:
+		case DirectionDown:
+
+			iterator := slices.All(yList) // iterate forwards (smallest to largest)
+			if dir == DirectionUp {
+				iterator = slices.Backward(yList) // iterate backwards (largest to smallest)
+			}
+
+			for _, yK := range iterator {
+				if yK == y {
+					break
+				}
+
+				if area, bb := moveVertical(ogVert, x, yK, xList, yList, xMap, yMap, dir+1, box); area != 0 {
+					return area, bb
+				}
+			}
+
+		case DirectionLeft:
+		case DirectionRight:
+
+			iterator := slices.All(xList) // iterate forwards (smallest to largest)
+			if dir == DirectionRight {
+				iterator = slices.Backward(xList) // iterate backwards (largest to smallest)
+			}
+
+			for _, xK := range iterator {
+				if xK == x {
+					break
+				}
+
+				if area, bb := moveHorizontal(ogVert, xK, y, xList, yList, xMap, yMap, dir+1, box); area != 0 {
+					return area, bb
+				}
+			}
+
+		}
+
+	case 3: // Only consider (xK, yK) where xK==xOg for horizontal or yK==yOg for vertical
 
 		switch dir {
 		case DirectionUp:
 		case DirectionDown:
-			{
 
-				// Same as Down
-				if area, bb := moveVertical(ogVert, x, ogVert[1], xList, yList, xMap, yMap, dir+1, box); area != 0 {
-					return area, bb
-				}
-
+			if area, bb := moveVertical(ogVert, x, ogVert[1], xList, yList, xMap, yMap, dir+1, box); area != 0 {
+				return area, bb
 			}
+
 		case DirectionRight:
 		case DirectionLeft:
-			{
-				// Same as Right
-				if area, bb := moveHorizontal(ogVert, ogVert[0], y, xList, yList, xMap, yMap, dir+1, box); area != 0 {
-					return area, bb
-				}
+
+			if area, bb := moveHorizontal(ogVert, ogVert[0], y, xList, yList, xMap, yMap, dir+1, box); area != 0 {
+				return area, bb
 			}
+
 		}
 
-	case 4:
-		// OgVert is only vertex left and must be valid
+	case 4: // OgVert is only vertex left and must be valid
 		box = append(box, ogVert)
 
 		// box[0] and box[2] are diagonals and box[1] and box[3] are diagonals
@@ -109,102 +149,44 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 			height := float64(y2 - y1)
 			return (int)(math.Abs(length * height)), nil // Return nil for the box cuz we don't care about it anymore.
 		}
-
-	default: // Steps 1 and 2
-
-		switch dir {
-		case DirectionUp:
-			{
-				// Starting from largest Y to smallest
-				for _, yK := range slices.Backward(yList) {
-					if yK == y {
-						break
-					}
-
-					// Same as Down
-					if area, bb := moveVertical(ogVert, x, yK, xList, yList, xMap, yMap, dir+1, box); area != 0 {
-						return area, bb
-					}
-				}
-			}
-		case DirectionRight:
-			{
-				// Starting from largest X to smallest
-				for _, xK := range slices.Backward(xList) {
-					if xK == x {
-						break
-					}
-
-					// Same as Right
-					if area, bb := moveHorizontal(ogVert, xK, y, xList, yList, xMap, yMap, dir+1, box); area != 0 {
-						return area, bb
-					}
-				}
-			}
-		case DirectionDown:
-			{
-				// Starting from the smallest Y to the largest
-				for _, yK := range yList {
-					if yK == y {
-						break
-					}
-
-					// Same as Up
-					if area, bb := moveVertical(ogVert, x, yK, xList, yList, xMap, yMap, dir+1, box); area != 0 {
-						return area, bb
-					}
-				}
-			}
-		case DirectionLeft:
-			{
-				// Starting from the smallest X to the largest
-				for _, xK := range xList {
-					if xK == x {
-						break
-					}
-
-					// Same as Left
-					if area, bb := moveHorizontal(ogVert, xK, y, xList, yList, xMap, yMap, dir+1, box); area != 0 {
-						return area, bb
-					}
-				}
-			}
-		}
 	}
 
 	return 0, box
 }
 
+// moveVertical checks if the vertex at (Xi, Yk) can be visited vertically (up or down) without escaping the bounds of the polygon. If so, it visits that vertex.
 func moveVertical(ogVert []int, xI, yK int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, box [][]int) (int, [][]int) {
 	var (
 		yMin = yList[0]
 		yMax = yList[len(yList)-1]
 	)
 
-	inBounds := xI >= slices.Min(yMap[yK]) && xI <= slices.Max(yMap[yK])
-	if (yK >= yMin && yK <= yMax) && inBounds {
-		area, bb := search(ogVert, xI, yK, xList, yList, xMap, yMap, dir, append(box, []int{xI, yK}))
-		return area, bb[:len(bb)-1] // Trim of the vert (xI, yK) from the box
+	inBounds := yK >= yMin && yK <= yMax
+	withinPolygon := xI >= slices.Min(yMap[yK]) && xI <= slices.Max(yMap[yK])
+	if inBounds && withinPolygon {
+		return search(ogVert, xI, yK, xList, yList, xMap, yMap, dir, append(box, []int{xI, yK}))
 	}
 
 	return 0, box
 }
 
+// moveHorizontal checks if the vertex at (Xk, Yi) can be visited horizontally (left or right) without escaping the bounds of the polygon. If so, it visits that vertex.
 func moveHorizontal(ogVert []int, xK, yI int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, box [][]int) (int, [][]int) {
 	var (
 		xMin = xList[0]
 		xMax = xList[len(xList)-1]
 	)
 
-	inBounds := yI >= slices.Min(xMap[xK]) && yI <= slices.Max(xMap[xK])
-	if (xK >= xMin && xK <= xMax) && inBounds {
-		area, bb := search(ogVert, xK, yI, xList, yList, xMap, yMap, dir, append(box, []int{xK, yI}))
-		return area, bb[:len(bb)-1] // Trim of the vert (xI, yK) from the box
+	inBounds := xK >= xMin && xK <= xMax
+	withinPolygon := yI >= slices.Min(xMap[xK]) && yI <= slices.Max(xMap[xK])
+	if inBounds && withinPolygon {
+		return search(ogVert, xK, yI, xList, yList, xMap, yMap, dir, append(box, []int{xK, yI}))
 	}
 
 	return 0, box
 }
 
+// isOnPolugon determins if the given vertex is a polgon vertex
 func isOnPoligon(vert []int, xMap, yMap map[int][]int) bool {
 	x := vert[0]
 	y := vert[1]
