@@ -70,7 +70,7 @@ func findBoxForVertex(vert []int, xList, yList []int, xMap, yMap map[int][]int, 
 	// Any other box which contains this vertex must contain at least another vertex and will be found during that vertex's search.
 	for dir := DirectionUp; dir <= DirectionLeft; dir++ {
 
-		if area, _ := search(vert, vert[0], vert[1], xList, yList, xMap, yMap, dir, seenCorners, [][]int{vert}); area != 0 {
+		if area := search(vert, vert[0], vert[1], xList, yList, xMap, yMap, dir, seenCorners, [][]int{vert}); area != 0 {
 			return area
 		}
 	}
@@ -80,7 +80,7 @@ func findBoxForVertex(vert []int, xList, yList []int, xMap, yMap map[int][]int, 
 
 // search recursively returns the area and vertices of the largest rectangle which doesn't exit the bounds of the polygon.
 // The rectangle will originate from ogVert and must contain 2 vertices that are diagonal from each other.
-func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) (int, [][]int) {
+func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) int {
 	dir = dir % 4
 
 	step := len(box)
@@ -89,13 +89,13 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 	if step >= 2 {
 		hash := hashCorner([]int{x, y}, box[step-1], box[step-2])
 		if seenCorners[hash] {
-			return 0, box
+			return 0
 		}
 	}
 
 	switch step {
 
-	case 1, 2: // Try the farthest valid Xk or Yk
+	case 1, 2: // Try the furthest valid Xk or Yk
 
 		switch dir {
 
@@ -109,11 +109,11 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 
 			for _, yK := range iterator {
 				if yK == y {
-					break
+					return 0
 				}
 
-				if area, bb := moveVertical(ogVert, x, yK, xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
-					return area, bb
+				if area := moveVertical(ogVert, x, yK, xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
+					return area
 				}
 			}
 
@@ -127,11 +127,11 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 
 			for _, xK := range iterator {
 				if xK == x {
-					break
+					return 0
 				}
 
-				if area, bb := moveHorizontal(ogVert, xK, y, xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
-					return area, bb
+				if area := moveHorizontal(ogVert, xK, y, xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
+					return area
 				}
 			}
 
@@ -143,17 +143,12 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 		case DirectionUp:
 		case DirectionDown:
 
-			if area, bb := moveVertical(ogVert, x, ogVert[1], xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
-				return area, bb
-			}
+			return moveVertical(ogVert, x, ogVert[1], xList, yList, xMap, yMap, dir+1, seenCorners, box)
 
 		case DirectionRight:
 		case DirectionLeft:
 
-			if area, bb := moveHorizontal(ogVert, ogVert[0], y, xList, yList, xMap, yMap, dir+1, seenCorners, box); area != 0 {
-				return area, bb
-			}
-
+			return moveHorizontal(ogVert, ogVert[0], y, xList, yList, xMap, yMap, dir+1, seenCorners, box)
 		}
 
 	case 4: // Box complete
@@ -173,11 +168,59 @@ func search(ogVert []int, x, y int, xList, yList []int, xMap, yMap map[int][]int
 
 			length := float64(x2 - x1)
 			height := float64(y2 - y1)
-			return (int)(math.Abs(length * height)), nil // Return nil for the box cuz we don't care about it anymore.
+			return (int)(math.Abs(length * height))
 		}
 	}
 
-	return 0, box
+	return 0
+}
+
+// moveVertical checks if the vertex at (Xi, Yk) can be visited vertically (up or down) without escaping the bounds of the polygon. If so, it visits that vertex.
+//
+// Let (Xi, Yi) be the current vert and (Xk, Yk) be the visiting vert
+func moveVertical(ogVert []int, xI, yK int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) int {
+
+	inBounds := yK >= yList[0] && yK <= yList[len(yList)-1]                   // Ymin <= Yk <= Ymax (feels redundant)
+	withinPolygon := xI >= slices.Min(yMap[yK]) && xI <= slices.Max(yMap[yK]) // min(x in Yk) <= Xi <= max(x in Yk)
+	if !inBounds || !withinPolygon {
+		return 0
+	}
+
+	return search(ogVert, xI, yK, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xI, yK}))
+}
+
+// moveHorizontal checks if the vertex at (Xk, Yi) can be visited horizontally (left or right) without escaping the bounds of the polygon. If so, it visits that vertex.
+//
+// Let (Xi, Yi) be the current vert and (Xk, Yk) be the visiting vert
+func moveHorizontal(ogVert []int, xK, yI int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) int {
+
+	inBounds := xK >= xList[0] && xK <= xList[len(xList)-1]                   // Xmin <= Xk <= Xmax (feels redundant)
+	withinPolygon := yI >= slices.Min(xMap[xK]) && yI <= slices.Max(xMap[xK]) // min(y in Xk) <= Yi <= max(y in Xk)
+	if !inBounds || !withinPolygon {
+		return 0
+	}
+
+	return search(ogVert, xK, yI, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xK, yI}))
+}
+
+// isOnPolugon determines if the given vertex is a polgon vertex.
+func isOnPoligon(vert []int, xMap, yMap map[int][]int) bool {
+	x := vert[0]
+	y := vert[1]
+
+	if xValues, ok := yMap[y]; ok {
+		if slices.Index(xValues, x) != -1 {
+			return true
+		}
+	}
+
+	if yValues, ok := xMap[x]; ok {
+		if slices.Index(yValues, y) != -1 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // from https://stackoverflow.com/questions/3934100/good-hash-function-for-list-of-2-d-positions
@@ -200,48 +243,4 @@ func hashVert(v []int) int {
 	hash = ((hash + x) << 5) - (hash + x)
 	hash = ((hash + y) << 5) - (hash + y)
 	return hash
-}
-
-// moveVertical checks if the vertex at (Xi, Yk) can be visited vertically (up or down) without escaping the bounds of the polygon. If so, it visits that vertex.
-func moveVertical(ogVert []int, xI, yK int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) (int, [][]int) {
-
-	inBounds := yK >= yList[0] && yK <= yList[len(yList)-1]                   // Ymin <= Yk <= Ymax (feels redundant)
-	withinPolygon := xI >= slices.Min(yMap[yK]) && xI <= slices.Max(yMap[yK]) // min(x in Yk) <= Xi <= max(x in Yk)
-	if inBounds && withinPolygon {
-		return search(ogVert, xI, yK, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xI, yK}))
-	}
-
-	return 0, box
-}
-
-// moveHorizontal checks if the vertex at (Xk, Yi) can be visited horizontally (left or right) without escaping the bounds of the polygon. If so, it visits that vertex.
-func moveHorizontal(ogVert []int, xK, yI int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) (int, [][]int) {
-
-	inBounds := xK >= xList[0] && xK <= xList[len(xList)-1]                   // Xmin <= Xk <= Xmax (feels redundant)
-	withinPolygon := yI >= slices.Min(xMap[xK]) && yI <= slices.Max(xMap[xK]) // min(y in Xk) <= Yi <= max(y in Xk)
-	if inBounds && withinPolygon {
-		return search(ogVert, xK, yI, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xK, yI}))
-	}
-
-	return 0, box
-}
-
-// isOnPolugon determins if the given vertex is a polgon vertex
-func isOnPoligon(vert []int, xMap, yMap map[int][]int) bool {
-	x := vert[0]
-	y := vert[1]
-
-	if xValues, ok := yMap[y]; ok {
-		if slices.Index(xValues, x) != -1 {
-			return true
-		}
-	}
-
-	if yValues, ok := xMap[x]; ok {
-		if slices.Index(yValues, y) != -1 {
-			return true
-		}
-	}
-
-	return false
 }
