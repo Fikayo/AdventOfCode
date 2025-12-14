@@ -31,10 +31,19 @@ func FindMaxBoundingBox(vertices [][]int) int {
 		x := v[0]
 		y := v[1]
 
-		xList = append(xList, x)
-		xMap[x] = append(xMap[x], y)
+		// Initialise arrays within the maps
+		if _, ok := xMap[x]; !ok {
+			xMap[x] = make([]int, 0)
+		}
 
+		if _, ok := yMap[y]; !ok {
+			yMap[y] = make([]int, 0)
+		}
+
+		xList = append(xList, x)
 		yList = append(yList, y)
+
+		xMap[x] = append(xMap[x], y)
 		yMap[y] = append(yMap[y], x)
 	}
 
@@ -196,7 +205,7 @@ func hashVert(v []int) int {
 // moveVertical checks if the vertex at (Xi, Yk) can be visited vertically (up or down) without escaping the bounds of the polygon. If so, it visits that vertex.
 func moveVertical(ogVert []int, xI, yK int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) (int, [][]int) {
 
-	inBounds := yK >= yList[0] && yK <= yList[len(yList)-1]                   // Ymin <= Yk <= Ymax
+	inBounds := yK >= yList[0] && yK <= yList[len(yList)-1]                   // Ymin <= Yk <= Ymax (feels redundant)
 	withinPolygon := xI >= slices.Min(yMap[yK]) && xI <= slices.Max(yMap[yK]) // min(x in Yk) <= Xi <= max(x in Yk)
 	if inBounds && withinPolygon {
 		return search(ogVert, xI, yK, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xI, yK}))
@@ -208,7 +217,7 @@ func moveVertical(ogVert []int, xI, yK int, xList, yList []int, xMap, yMap map[i
 // moveHorizontal checks if the vertex at (Xk, Yi) can be visited horizontally (left or right) without escaping the bounds of the polygon. If so, it visits that vertex.
 func moveHorizontal(ogVert []int, xK, yI int, xList, yList []int, xMap, yMap map[int][]int, dir Direction, seenCorners map[int]bool, box [][]int) (int, [][]int) {
 
-	inBounds := xK >= xList[0] && xK <= xList[len(xList)-1]                   // Xmin <= Xk <= Xmax
+	inBounds := xK >= xList[0] && xK <= xList[len(xList)-1]                   // Xmin <= Xk <= Xmax (feels redundant)
 	withinPolygon := yI >= slices.Min(xMap[xK]) && yI <= slices.Max(xMap[xK]) // min(y in Xk) <= Yi <= max(y in Xk)
 	if inBounds && withinPolygon {
 		return search(ogVert, xK, yI, xList, yList, xMap, yMap, dir, seenCorners, append(box, []int{xK, yI}))
